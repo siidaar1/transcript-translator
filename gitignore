@@ -1,0 +1,12 @@
+# secrets - never commit
+github_config.json
+.env
+
+# local output
+saved/
+gemini_error.png
+
+# python
+__pycache__/
+*.pyc
+.venv/
