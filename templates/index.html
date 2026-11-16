@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Video transcript translator</title>
+<style>
+  :root{
+    --paper:#f3f6f4; --ink:#17231f; --muted:#5d6f68; --line:#cdd9d3;
+    --accent:#0f6b5a; --ok:#0f6b5a; --err:#b3261e; --run:#b7791f; --card:#ffffff;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--paper:#101916; --ink:#e6efeb; --muted:#93a8a0; --line:#2a3b35; --accent:#4fc3a8; --ok:#4fc3a8; --err:#ff8a80; --run:#f0b35a; --card:#17231f;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 Georgia,"Times New Roman",serif}
+  main{max-width:860px;margin:0 auto;padding:40px 20px 80px}
+  h1{font-size:2rem;line-height:1.2;margin:0 0 6px;letter-spacing:-.01em}
+  p.sub{margin:0 0 28px;color:var(--muted)}
+  form{display:flex;gap:10px;flex-wrap:wrap}
+  input,select,button{font:inherit;padding:12px 14px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
+  input[type=url]{flex:1 1 320px;min-width:0}
+  button{background:var(--accent);color:#fff;border-color:var(--accent);cursor:pointer;font-weight:600}
+  button:disabled{opacity:.55;cursor:wait}
+  :focus-visible{outline:3px solid var(--run);outline-offset:2px}
+  ol.steps{list-style:none;margin:30px 0 0;padding:0;border-left:3px solid var(--line)}
+  ol.steps li{padding:6px 0 14px 18px;position:relative}
+  ol.steps li::before{content:"";position:absolute;left:-9px;top:12px;width:15px;height:15px;border-radius:50%;background:var(--paper);border:3px solid var(--line)}
+  li[data-state=running]::before{border-color:var(--run);animation:pulse 1s infinite}
+  li[data-state=done]::before{border-color:var(--ok);background:var(--ok)}
+  li[data-state=error]::before{border-color:var(--err);background:var(--err)}
+  .name{font-weight:700}
+  .state{font-family:system-ui,sans-serif;font-size:.9rem;color:var(--muted)}
+  li[data-state=running] .state{color:var(--run)}
+  li[data-state=done] .state{color:var(--ok)}
+  li[data-state=error] .state{color:var(--err)}
+  @keyframes pulse{50%{box-shadow:0 0 0 6px rgba(183,121,31,.2)}}
+  @media (prefers-reduced-motion:reduce){li[data-state=running]::before{animation:none}}
+  #result{margin-top:30px;display:none}
+  .tabs{display:flex;gap:8px;margin-bottom:12px}
+  .tabs button{background:var(--card);color:var(--ink)}
+  .tabs button[aria-pressed=true]{background:var(--accent);color:#fff}
+  #text{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 18px;max-height:60vh;overflow:auto}
+  table{width:100%;border-collapse:collapse}
+  th{position:sticky;top:0;background:var(--card);text-align:left;font:600 .85rem system-ui,sans-serif;color:var(--muted);padding:10px 8px;border-bottom:2px solid var(--line)}
+  td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+  td.t{width:76px;white-space:nowrap;font:.9rem system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--accent)}
+  tr:last-child td{border-bottom:0}
+  #player{margin-bottom:18px}
+  #stage{position:relative;aspect-ratio:16/9;background:#000;border-radius:8px;overflow:hidden;container-type:inline-size}
+  #stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+  #stage:fullscreen{aspect-ratio:auto;border-radius:0}
+  #sub{display:none;position:absolute;left:50%;transform:translateX(-50%);bottom:clamp(44px,8cqw,90px);z-index:2;
+    max-width:86%;text-align:center;pointer-events:none;color:#5aa9ff;background:rgba(0,0,0,.62);
+    padding:.15em .6em;border-radius:4px;font:600 clamp(12px,1.9cqw,16px)/1.4 system-ui,sans-serif}
+  #stage:fullscreen #sub{font-size:1.5cqw;bottom:clamp(64px,5cqw,110px)}
+  .bar{display:flex;gap:12px;align-items:center;margin-top:10px;flex-wrap:wrap}
+  #playerMsg{font:.9rem system-ui,sans-serif;color:var(--err)}
+  .modes{display:flex;gap:8px;margin:0 0 24px}
+  .modes button{background:var(--card);color:var(--ink)}
+  .modes button[aria-pressed=true]{background:var(--accent);color:#fff}
+  .back{background:var(--card);color:var(--ink);margin-bottom:14px}
+  h2{font-size:1.15rem;line-height:1.35;margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+  .card{display:block;width:100%;text-align:left;padding:0;overflow:hidden;background:var(--card);color:var(--ink);
+    border:1px solid var(--line);border-radius:8px;font-weight:400}
+  .card:hover{border-color:var(--accent)}
+  .card img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:#000}
+  .card .ct{padding:10px 12px 12px}
+  .card .ti{font-weight:700;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .card .meta{font:.8rem/1.5 system-ui,sans-serif;color:var(--muted);margin-top:4px}
+  .card .bad{color:var(--err)}
+  #savedEmpty{color:var(--muted)}
+  #savedInfo{font:.9rem system-ui,sans-serif;color:var(--muted)}
+  #savedMsg{color:var(--err);font-family:system-ui,sans-serif;margin:0 0 12px}
+  .item{position:relative}
+  .del{position:absolute;top:8px;right:8px;padding:5px 11px;font:600 .8rem system-ui,sans-serif;
+    background:rgba(0,0,0,.72);border-color:transparent;color:#fff}
+  .del:hover,.danger{background:#b3261e;border-color:#b3261e;color:#fff}
+  dialog{max-width:400px;padding:22px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+  dialog::backdrop{background:rgba(0,0,0,.5)}
+  dialog p{margin:0 0 18px}
+  dialog .row{display:flex;gap:10px;justify-content:flex-end}
+  #err{color:var(--err);margin-top:16px;font-family:system-ui,sans-serif}
+</style>
+</head>
+<body>
+<main>
+  <h1>Video transcript translator</h1>
+  <p class="sub">Paste a YouTube link. The bot extracts the transcript, translates it, and shows it here.</p>
+
+  <nav class="modes" aria-label="Pages">
+    <button type="button" data-mode="new" aria-pressed="true">New translation</button>
+    <button type="button" data-mode="saved" aria-pressed="false">Saved videos <span id="savedCount"></span></button>
+  </nav>
+
+  <div id="newPanel">
+  <form id="f">
+    <input type="url" id="url" placeholder="https://www.youtube.com/watch?v=..." required aria-label="YouTube video URL">
+    <select id="engine" aria-label="Translation engine">
+      <option value="gemini">Gemini (browser)</option>
+      <option value="google">Google Translate</option>
+    </select>
+    <select id="lang" aria-label="Translate to">
+      <option value="ar">Arabic</option>
+      <option value="ku">Kurdish (Kurmanji)</option>
+      <option value="ckb">Kurdish (Sorani)</option>
+      <option value="badini">Kurdish Badini (بەهدینی)</option>
+      <option value="en">English</option>
+      <option value="tr">Turkish</option>
+      <option value="fa">Persian</option>
+      <option value="fr">French</option>
+      <option value="es">Spanish</option>
+      <option value="de">German</option>
+    </select>
+    <button id="go" type="submit">Translate video</button>
+  </form>
+
+  <ol class="steps" id="steps" aria-live="polite">
+    {% for key, label in steps %}
+    <li data-key="{{ key }}" data-state="waiting">
+      <div class="name">{{ label }}</div>
+      <div class="state">Waiting</div>
+    </li>
+    {% endfor %}
+  </ol>
+  <div id="err" role="alert"></div>
+  </div>
+
+  <div id="savedPanel" hidden>
+    <p id="savedMsg" role="alert"></p>
+    <div id="ghBar" class="bar" hidden>
+      <button type="button" id="syncAll" class="ghost">Upload all saved videos to GitHub</button>
+      <span id="savedInfo"></span>
+    </div>
+    <p id="savedEmpty" hidden>Nothing saved yet. Translate a video and it will appear here.</p>
+    <div class="grid" id="savedList"></div>
+  </div>
+
+  <section id="result">
+    <button type="button" id="back" class="back" hidden>Back to saved videos</button>
+    <h2 id="resTitle" dir="auto"></h2>
+    <div id="player">
+      <div id="stage"><div id="sub" dir="auto"></div></div>
+      <div class="bar">
+        <button type="button" id="fs">Full screen with subtitles</button>
+        <span id="playerMsg" role="alert"></span>
+      </div>
+    </div>
+    <div class="tabs">
+      <button type="button" data-view="translated" aria-pressed="true">Translated</button>
+      <button type="button" data-view="original" aria-pressed="false">Original</button>
+      <button type="button" id="copy">Copy text</button>
+      <button type="button" id="srt">Download .srt</button>
+    </div>
+    <div id="text"></div>
+  </section>
+</main>
+
+<dialog id="confirmDlg" aria-labelledby="confirmText">
+  <p id="confirmText"></p>
+  <div class="row">
+    <button type="button" id="no" class="ghost">Cancel</button>
+    <button type="button" id="yes" class="danger">Delete</button>
+  </div>
+</dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const LABEL = {waiting:"Waiting", running:"In progress", done:"Finished", error:"Failed"};
+let data = null, view = "translated", timer = null, mode = "new", jobDone = null;
+
+function paintSteps(steps){
+  for (const li of document.querySelectorAll("#steps li")){
+    const s = steps[li.dataset.key];
+    li.dataset.state = s.state;
+    li.querySelector(".state").textContent = LABEL[s.state] + (s.detail ? " — " + s.detail : "");
+  }
+}
+function paintText(){
+  const box = $("#text"); box.textContent = "";
+  const table = document.createElement("table");
+  const head = table.createTHead().insertRow();
+  for (const h of ["Time", view === "translated" ? "Translation" : "Original"]){
+    const th = document.createElement("th"); th.textContent = h; head.append(th);
+  }
+  const body = table.createTBody();
+  for (const l of data[view]){
+    const tr = body.insertRow();
+    const t = tr.insertCell(); t.className = "t"; t.textContent = l.time;
+    const x = tr.insertCell(); x.textContent = l.text; x.dir = "auto";
+  }
+  box.append(table);
+  $("#result").style.display = "block";
+}
+function setView(v){
+  view = v;
+  document.querySelectorAll(".tabs [data-view]").forEach(x => x.setAttribute("aria-pressed", x.dataset.view === v));
+}
+function display(d){                       // show one finished job (new or saved)
+  data = d; videoUrl = d.url || "";
+  setView(d.translated && d.translated.length ? "translated" : "original");
+  $("#resTitle").textContent = d.title || "";
+  $("#back").hidden = mode !== "saved";
+  paintText(); showPlayer();
+}
+async function poll(id){
+  const r = await fetch("/status/" + id), job = await r.json();
+  paintSteps(job.steps);
+  if (job.status === "running") return;
+  clearInterval(timer); $("#go").disabled = false;
+  if (job.status === "error"){ $("#err").textContent = "Error: " + job.error; return; }
+  if (job.status === "partial") $("#err").textContent = job.error;
+  jobDone = job; loadSavedList();
+  if (mode === "new") display(job);
+}
+$("#f").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("#err").textContent = ""; $("#result").style.display = "none"; $("#go").disabled = true;
+  stopPlayer(); jobDone = null; data = null;
+  paintSteps({open:{state:"waiting"},extract:{state:"waiting"},translate:{state:"waiting"},done:{state:"waiting"}});
+  const r = await fetch("/start", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({url:$("#url").value, lang:$("#lang").value, engine:$("#engine").value})});
+  const j = await r.json();
+  if (!r.ok){ $("#err").textContent = j.error; $("#go").disabled = false; return; }
+  clearInterval(timer); timer = setInterval(() => poll(j.job_id), 1000);
+});
+document.querySelectorAll(".tabs [data-view]").forEach(b => b.addEventListener("click", () => {
+  view = b.dataset.view;
+  document.querySelectorAll(".tabs [data-view]").forEach(x => x.setAttribute("aria-pressed", x === b));
+  if (data) paintText();
+}));
+$("#copy").addEventListener("click", () => navigator.clipboard.writeText(data[view].map(l => l.text).join("\n")));
+
+function toSec(t){const p=t.split(":").map(Number);return p.length===3?p[0]*3600+p[1]*60+p[2]:p[0]*60+p[1];}
+function stamp(sec){
+  const z=(n,w)=>String(n).padStart(w,"0");
+  return z(Math.floor(sec/3600),2)+":"+z(Math.floor(sec%3600/60),2)+":"+z(Math.floor(sec%60),2)+",000";
+}
+$("#srt").addEventListener("click", () => {
+  if (!data) return;
+  const all = data[view].filter(l => l.time), out = [];
+  all.forEach((l, i) => {
+    if (!l.text) return;
+    const start = toSec(l.time);
+    let end = i + 1 < all.length ? toSec(all[i + 1].time) : start + 4;
+    if (end <= start) end = start + 2;
+    out.push((out.length + 1) + "\n" + stamp(start) + " --> " + stamp(end) + "\n" + l.text + "\n");
+  });
+  const blob = new Blob([out.join("\n")], {type:"text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "subtitles_" + view + ".srt"; a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+let videoUrl = "", player = null, ytReady = null, subTimer = null;
+
+function videoId(u){
+  const m = u.match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/|\/live\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+function loadYT(){
+  if (ytReady) return ytReady;
+  ytReady = new Promise((res, rej) => {
+    if (window.YT && YT.Player) return res();
+    const fail = () => { ytReady = null; rej(new Error("YouTube script not loaded")); };
+    const timer = setTimeout(fail, 10000);
+    window.onYouTubeIframeAPIReady = () => { clearTimeout(timer); res(); };
+    const sc = document.createElement("script");
+    sc.src = "https://www.youtube.com/iframe_api";
+    sc.onerror = () => { clearTimeout(timer); fail(); };
+    document.head.append(sc);
+  });
+  return ytReady;
+}
+function say(text, withLink){
+  const msg = $("#playerMsg"); msg.textContent = text;
+  if (withLink){
+    const a = document.createElement("a");
+    a.href = videoUrl; a.target = "_blank"; a.rel = "noopener"; a.textContent = " Open it on YouTube";
+    msg.append(a);
+  }
+}
+function onPlayerError(e){
+  const code = e && e.data;
+  const why = {
+    2: "The video link is not valid.",
+    5: "The player had an HTML5 error.",
+    100: "The video was not found or is private.",
+    101: "The owner of this video blocks embedding.",
+    150: "The owner of this video blocks embedding.",
+    153: "YouTube rejected this page as the embed source. Open this page as http://localhost:5000 and try again."
+  }[code] || "The video could not be played.";
+  say(why + " (error " + code + ")", true);
+}
+function makeFrame(id){
+  const f = document.createElement("iframe");
+  f.id = "ytframe"; f.title = "Video with translated subtitles";
+  f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+  f.referrerPolicy = "strict-origin-when-cross-origin";
+  let src = "https://www.youtube.com/embed/" + id + "?enablejsapi=1&rel=0&fs=0&playsinline=1";
+  if (location.protocol.startsWith("http")) src += "&origin=" + encodeURIComponent(location.origin);
+  f.src = src;
+  $("#stage").insertBefore(f, $("#stage").firstChild);
+  return f;
+}
+async function showPlayer(){
+  say("");
+  const id = videoId(videoUrl);
+  if (!id){ say("Could not read the video ID from this link."); return; }
+  clearInterval(subTimer); player = null;
+  const old = $("#stage iframe"); if (old) old.remove();
+  const frame = makeFrame(id);            // the video shows right away
+  try { await loadYT(); }                 // then the subtitles are connected
+  catch (err){
+    say("The video is shown, but subtitles are off: YouTube's player script could not load (check your connection, VPN or ad blocker).", true);
+    return;
+  }
+  player = new YT.Player(frame, {events:{onError:onPlayerError}});
+  subTimer = setInterval(tickSub, 200);
+}
+function stopPlayer(){
+  clearInterval(subTimer); player = null;
+  const old = $("#stage iframe"); if (old) old.remove();   // also stops the sound
+  $("#sub").style.display = "none";
+}
+function cueList(){ return (data.translated && data.translated.length) ? data.translated : data.original; }
+function tickSub(){
+  if (!player || !player.getCurrentTime || !data) return;
+  const t = player.getCurrentTime(), list = cueList();
+  let text = "";
+  for (let i = list.length - 1; i >= 0; i--){
+    if (!list[i].time) continue;
+    const s = toSec(list[i].time);
+    if (s <= t){
+      const next = list.slice(i + 1).find(x => x.time);
+      const e = next ? toSec(next.time) : s + 4;
+      if (t < e) text = list[i].text;
+      break;
+    }
+  }
+  const el = $("#sub");
+  if (el.textContent !== text) el.textContent = text;
+  el.style.display = text ? "block" : "none";
+}
+$("#fs").addEventListener("click", () => {
+  if (document.fullscreenElement) document.exitFullscreen(); else $("#stage").requestFullscreen();
+});
+
+// ---------- saved videos ----------
+function setMode(m){
+  mode = m;
+  document.querySelectorAll(".modes [data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  $("#newPanel").hidden = m !== "new";
+  $("#savedPanel").hidden = m !== "saved";
+  stopPlayer(); $("#result").style.display = "none";
+  if (m === "saved") loadSavedList();
+  else if (jobDone) display(jobDone);
+}
+document.querySelectorAll(".modes [data-mode]").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+
+async function loadSavedList(){
+  try {
+    const items = await (await fetch("/history")).json();
+    $("#savedCount").textContent = items.length ? "(" + items.length + ")" : "";
+    renderSaved(items);
+  } catch (e) {}
+}
+function renderSaved(items){
+  const box = $("#savedList"); box.textContent = "";
+  $("#savedEmpty").hidden = items.length > 0;
+  for (const it of items){
+    const b = document.createElement("button"); b.type = "button"; b.className = "card";
+    if (it.video_id){
+      const img = document.createElement("img"); img.loading = "lazy"; img.alt = "";
+      img.src = "https://i.ytimg.com/vi/" + it.video_id + "/mqdefault.jpg"; img.onerror = () => img.remove();
+      b.append(img);
+    }
+    const ct = document.createElement("div"); ct.className = "ct";
+    const ti = document.createElement("div"); ti.className = "ti"; ti.dir = "auto"; ti.textContent = it.title || it.url;
+    const m1 = document.createElement("div"); m1.className = "meta"; m1.textContent = it.language + ", " + it.lines + " lines";
+    const m2 = document.createElement("div"); m2.className = "meta"; m2.textContent = (it.created || "").replace("T", " ");
+    ct.append(ti, m1, m2);
+    if (!it.translated){
+      const m3 = document.createElement("div"); m3.className = "meta bad"; m3.textContent = "Translation failed, original only"; ct.append(m3);
+    }
+    b.append(ct);
+    b.addEventListener("click", () => openSaved(it.id));
+    const del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "Delete";
+    del.setAttribute("aria-label", "Delete " + (it.title || it.url));
+    del.addEventListener("click", () => askDelete(it));
+    const item = document.createElement("div"); item.className = "item"; item.append(b, del);
+    box.append(item);
+  }
+}
+async function openSaved(id){
+  const r = await fetch("/history/" + encodeURIComponent(id));
+  if (!r.ok) return;
+  $("#savedPanel").hidden = true;
+  display(await r.json());
+}
+$("#back").addEventListener("click", () => {
+  stopPlayer(); $("#result").style.display = "none"; $("#savedPanel").hidden = false;
+});
+
+// ---------- delete a saved video (with confirmation) ----------
+let pendingDelete = null, ghRepo = "";
+fetch("/github/status").then(r => r.json()).then(j => {
+  ghRepo = j.enabled ? j.repo : ""; $("#ghBar").hidden = !j.enabled;
+}).catch(() => {});
+$("#syncAll").addEventListener("click", async () => {
+  const btn = $("#syncAll"); btn.disabled = true; $("#savedMsg").textContent = ""; $("#savedInfo").textContent = "Uploading…";
+  try {
+    const r = await fetch("/github/sync", {method:"POST"}), j = await r.json();
+    if (!r.ok) throw new Error(j.error || "failed");
+    $("#savedInfo").textContent = j.uploaded + " uploaded, " + j.already + " were already on GitHub.";
+  } catch (e) { $("#savedInfo").textContent = ""; $("#savedMsg").textContent = "GitHub upload failed: " + e.message; }
+  btn.disabled = false;
+});
+function askDelete(it){
+  pendingDelete = it;
+  $("#confirmText").textContent = "Are you sure you want to delete “" + (it.title || it.url) +
+    "”? Its saved folder and subtitle files will be removed" +
+    (ghRepo ? ", also from GitHub (" + ghRepo + ")." : ".");
+  $("#confirmDlg").showModal();
+}
+$("#no").addEventListener("click", () => { pendingDelete = null; $("#confirmDlg").close(); });
+$("#yes").addEventListener("click", async () => {
+  const it = pendingDelete; pendingDelete = null; $("#confirmDlg").close();
+  if (!it) return;
+  $("#savedMsg").textContent = "";
+  const r = await fetch("/history/" + encodeURIComponent(it.id), {method:"DELETE"});
+  if (!r.ok){ $("#savedMsg").textContent = "Could not delete this video. Try again."; return; }
+  const out = await r.json().catch(() => ({}));
+  if (out.github_error) $("#savedMsg").textContent = "Deleted here, but removing it from GitHub failed: " + out.github_error;
+  if (jobDone && jobDone.saved_id === it.id) jobDone = null;
+  loadSavedList();
+});
+loadSavedList();
+</script>
+</body>
+</html>
