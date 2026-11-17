@@ -326,15 +326,30 @@ def _parse(answer, chunk):
 def _build_prompt(language, chunk, details=""):
     n = len(chunk)
     body = "\n".join(f"@@{i}@@ {l['text']}" for i, l in enumerate(chunk, 1))
+    sorani = "sorani" in (language + " " + details).lower()
+    style = (
+        "Style rules for Sorani (Northern Iraq, Kurdistan Region - Sulaymaniyah / Erbil):\n"
+        "- Write the way people really TALK in daily life there: casual, spoken, friendly Sorani. "
+        "NOT formal, NOT literary, NOT news-anchor or textbook Kurdish.\n"
+        "- Arabic loanwords that Kurds already use in everyday speech are GOOD and should stay "
+        "(for example: مهم، مشکیلە، فایدە، وەقت، حەقیقەت، مەعلومات، سەبەب، نەتیجە، خەیاڵ، تەئکید). "
+        "Do not replace them with rare, stiff or invented \"pure Kurdish\" words that nobody says out loud.\n"
+        "- Prefer the simple word a normal person would use over the fancy or academic one.\n"
+    ) if sorani else ""
     return (
         f"You are a professional subtitle translator. Translate the {n} numbered subtitle lines below into {language}.\n"
         + (f"About the language: {details}.\n" if details else "") + "\n"
         "Meaning rules (the most important part):\n"
         f"- Translate the MEANING, not the letters and not word by word. Write natural, fluent {language}, "
         "the way a native speaker would say it in a video.\n"
-        f"- Do NOT transliterate. Never write an English word by spelling its sound with {language} letters. "
-        f"Use the real {language} word for every ordinary word. Only brand names, product names and people's names "
-        "may stay as they are.\n"
+        "- Do NOT translate famous international terms, business / tech / internet words, brand names, product names, "
+        "platform names or people's names. Keep them exactly as in the original, in English letters. "
+        "Examples: dropshipping, ecommerce, e-commerce, marketing, Shopify, Amazon, TikTok, Facebook, Instagram, "
+        "YouTube, Google, AI, SEO, ads, store, niche, brand, influencer, startup, online, link, app, website, "
+        "profit, ROI. If a term is widely known and understood in English by ordinary people, leave it in English.\n"
+        f"- For every other ordinary word, use the real {language} word. Do NOT transliterate: never write an English word "
+        f"by spelling its sound with {language} letters.\n"
+        + style +
         "- The lines are pieces of longer sentences from automatic captions. Read the neighbouring lines to understand "
         "the whole sentence, then translate each line so it makes sense in its own place. "
         "If a number or word is clearly broken by the captions, use the meaning from the context.\n\n"
