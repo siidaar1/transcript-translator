@@ -38,8 +38,8 @@ def config():
             cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
         except ValueError:
             cfg = {}
-    token = (os.environ.get("GITHUB_TOKEN") or cfg.get("token") or "").strip()
-    repo = (os.environ.get("GITHUB_REPO") or cfg.get("repo") or "").strip()
+    token = (os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or cfg.get("token") or "").strip()
+    repo = (os.environ.get("GH_REPO") or os.environ.get("GITHUB_REPO") or cfg.get("repo") or "").strip()
     if not token or "PASTE" in token or "/" not in repo or "your-" in repo.lower():
         return None
     return {
